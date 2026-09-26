@@ -56,7 +56,11 @@ func main() {
 	mux.Handle("/api/", handler)
 	mux.Handle("/web/", http.StripPrefix("/web/", web))
 	mux.Handle("/", http.RedirectHandler("/web/", http.StatusFound))
-	server := &http.Server{Addr: ":8080", Handler: platform.RequestID(platform.Logging(logger, mux)), ReadHeaderTimeout: 5 * time.Second}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	server := &http.Server{Addr: ":" + port, Handler: platform.RequestID(platform.Logging(logger, mux)), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		logger.Info("api_started", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: bantercore
+    runtime: go
+    buildCommand: go build -o bantercore ./cmd/api
+    startCommand: ./bantercore
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
