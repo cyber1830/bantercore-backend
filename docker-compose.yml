@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bantercore
+      POSTGRES_USER: bantercore
+      POSTGRES_PASSWORD: bantercore
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data", "./migrations:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bantercore -d bantercore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: ["redis_data:/data"]
+  api:
+    build: .
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://bantercore:bantercore@postgres:5432/bantercore?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: change-this-in-production
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_started}
+volumes:
+  postgres_data:
+  redis_data:
