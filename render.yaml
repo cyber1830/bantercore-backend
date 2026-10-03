@@ -8,3 +8,15 @@ services:
     envVars:
       - key: JWT_SECRET
         generateValue: true
+  - type: web
+    name: bantercore-agent
+    runtime: node
+    rootDir: agent-service
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b

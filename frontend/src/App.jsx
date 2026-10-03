@@ -470,7 +470,7 @@ function ThreadModal({ discussion, token, user, onClose, onAuth, fullPage = fals
     setSummaryError("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_AGENT_URL || "http://localhost:4110"}/v1/thread-summary`,
+        `${import.meta.env.VITE_AGENT_URL || (import.meta.env.DEV ? "http://localhost:4110" : "https://bantercore-agent.onrender.com")}/v1/thread-summary`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
