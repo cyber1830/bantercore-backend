@@ -36,7 +36,11 @@ function App() {
   const loadDiscussions = async () => {
     setLoading(true);
     try {
-      setDiscussions(await api("/v1/discussions"));
+      setDiscussions(
+        await api("/v1/discussions", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }),
+      );
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -46,7 +50,7 @@ function App() {
 
   useEffect(() => {
     loadDiscussions();
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     const syncThread = () => {
