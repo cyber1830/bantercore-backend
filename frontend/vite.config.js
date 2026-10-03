@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/web/',
   plugins: [react()],
   build: {
     outDir: "../web",
