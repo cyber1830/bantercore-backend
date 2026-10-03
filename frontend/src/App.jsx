@@ -237,6 +237,7 @@ function App() {
         <AuthModal
           mode={authMode}
           onClose={() => setAuthMode(null)}
+          onSwitch={() => setAuthMode(authMode === "signup" ? "signin" : "signup")}
           onSuccess={(data) => {
             setToken(data.token);
             setUser(data.user);
@@ -356,7 +357,7 @@ function AuthChoice({ onClose, onSelect }) {
   );
 }
 
-function AuthModal({ mode, onClose, onSuccess }) {
+function AuthModal({ mode, onClose, onSuccess, onSwitch }) {
   const signup = mode === "signup";
   const [form, setForm] = useState({ username: "", email: "", password: "" });
   const [error, setError] = useState("");
@@ -411,6 +412,9 @@ function AuthModal({ mode, onClose, onSuccess }) {
             {signup ? "Create account" : "Sign in"}
           </button>
         </form>
+        <button className="auth-switch" type="button" onClick={onSwitch}>
+          {signup ? "Already have an account? Sign in" : "New here? Create an account"}
+        </button>
       </div>
     </div>
   );

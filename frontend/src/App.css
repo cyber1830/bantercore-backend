@@ -321,7 +321,7 @@ footer small {
   display: grid;
   place-items: center;
   padding: 20px;
-  z-index: 10;
+  z-index: 200;
 }
 .thread-page {
   position: fixed;
@@ -399,6 +399,17 @@ footer small {
 .modal-card form {
   display: grid;
   gap: 10px;
+}
+.auth-switch {
+  width: 100%;
+  margin-top: 16px;
+  border: 0;
+  background: transparent;
+  color: #ef6b4f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
 }
 .close {
   position: absolute;
