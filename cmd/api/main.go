@@ -38,9 +38,11 @@ func main() {
 				topic TEXT NOT NULL,
 				body TEXT NOT NULL,
 				type TEXT NOT NULL DEFAULT 'open',
+				visibility TEXT NOT NULL DEFAULT 'public',
 				created_at TIMESTAMPTZ NOT NULL
 			);
 			ALTER TABLE discussions ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'open';
+			ALTER TABLE discussions ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
 			CREATE INDEX IF NOT EXISTS discussions_created_at_idx ON discussions (created_at DESC);
 		`)
 		if err != nil {

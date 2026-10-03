@@ -11,12 +11,13 @@ import (
 )
 
 type Discussion struct {
-	ID        string    `json:"id"`
-	AuthorID  string    `json:"authorId"`
-	Topic     string    `json:"topic"`
-	Body      string    `json:"body"`
-	Type      string    `json:"type"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	AuthorID   string    `json:"authorId"`
+	Topic      string    `json:"topic"`
+	Body       string    `json:"body"`
+	Type       string    `json:"type"`
+	Visibility string    `json:"visibility"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type Store interface {
@@ -108,12 +109,13 @@ func newDiscussion(author, topic, body, discussionType string) Discussion {
 	topic = normalizeText(topic)
 	body = normalizeText(body)
 	return Discussion{
-		ID:        uuid.NewString(),
-		AuthorID:  author,
-		Topic:     topic,
-		Body:      body,
-		Type:      discussionType,
-		CreatedAt: time.Now().UTC(),
+		ID:         uuid.NewString(),
+		AuthorID:   author,
+		Topic:      topic,
+		Body:       body,
+		Type:       discussionType,
+		Visibility: "public",
+		CreatedAt:  time.Now().UTC(),
 	}
 }
 
@@ -147,11 +149,27 @@ func (s *Service) Create(ctx context.Context, author, topic, body string, types 
 		discussionType = "open"
 	}
 	d := newDiscussion(author, topic, body, discussionType)
+	if len(types) > 1 && types[1] == "private" {
+		d.Visibility = "private"
+	}
 	if err := s.store.Create(ctx, d); err != nil {
 		return Discussion{}, err
 	}
 	_ = s.publisher.Publish(ctx, "discussion.created", d)
 	return d, nil
+}
+
+func (s *Service) CanAccess(ctx context.Context, discussionID, userID string) bool {
+	rows, err := s.store.List(ctx, 100)
+	if err != nil {
+		return false
+	}
+	for _, discussion := range rows {
+		if discussion.ID == discussionID {
+			return discussion.Visibility != "private" || discussion.AuthorID == userID
+		}
+	}
+	return false
 }
 
 func (s *Service) List(ctx context.Context, limit int) ([]Discussion, error) {

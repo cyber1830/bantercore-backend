@@ -142,10 +142,14 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		h.writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if rows == nil {
-		rows = []Discussion{}
+	user, _ := h.user(r)
+	visible := make([]Discussion, 0, len(rows))
+	for _, row := range rows {
+		if row.Visibility != "private" || row.AuthorID == user {
+			visible = append(visible, row)
+		}
 	}
-	h.writeJSON(w, http.StatusOK, rows)
+	h.writeJSON(w, http.StatusOK, visible)
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -156,16 +160,17 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var in struct {
-		Topic string `json:"topic"`
-		Body  string `json:"body"`
-		Type  string `json:"type"`
+		Topic      string `json:"topic"`
+		Body       string `json:"body"`
+		Type       string `json:"type"`
+		Visibility string `json:"visibility"`
 	}
 	if err := h.decodeJSON(r, &in); err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
-	d, err := h.service.Create(r.Context(), user, in.Topic, in.Body, in.Type)
+	d, err := h.service.Create(r.Context(), user, in.Topic, in.Body, in.Type, in.Visibility)
 	if err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, "validation error")
 		return
@@ -181,6 +186,10 @@ func (h *Handler) comment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := h.parseDiscussionID(r.URL.Path)
+	if !h.service.CanAccess(r.Context(), id, user) {
+		h.writeJSONError(w, http.StatusForbidden, "private discussion access denied")
+		return
+	}
 	var in struct {
 		Body string `json:"body"`
 	}
@@ -199,6 +208,11 @@ func (h *Handler) comment(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) comments(w http.ResponseWriter, r *http.Request) {
 	id := h.parseDiscussionID(r.URL.Path)
+	user, _ := h.user(r)
+	if !h.service.CanAccess(r.Context(), id, user) {
+		h.writeJSONError(w, http.StatusForbidden, "private discussion access denied")
+		return
+	}
 	comments := h.service.Comments(r.Context(), id)
 	if comments == nil {
 		comments = []Comment{}

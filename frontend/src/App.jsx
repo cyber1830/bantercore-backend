@@ -201,7 +201,7 @@ function App() {
                 key={discussion.id}
                 onClick={() => openThread(discussion)}
               >
-          <div className="topic-label">{discussion.type || "open"} · {discussion.topic}</div>
+          <div className="topic-label">{discussion.visibility === "private" ? "private" : "public"} · {discussion.type || "open"} · {discussion.topic}</div>
                 <h3>{discussion.body}</h3>
                 <p>
                   Community member · {discussion.createdAt ? new Date(discussion.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Today"} · <span>Open thread →</span>
@@ -268,6 +268,7 @@ function Composer({ token, onPublished, setNotice }) {
   const [topic, setTopic] = useState("");
   const [body, setBody] = useState("");
   const [type, setType] = useState("open");
+  const [visibility, setVisibility] = useState("public");
   const submit = async (event) => {
     event.preventDefault();
     try {
@@ -277,11 +278,12 @@ function Composer({ token, onPublished, setNotice }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ topic, body, type }),
+        body: JSON.stringify({ topic, body, type, visibility }),
       });
       setTopic("");
       setBody("");
       setType("open");
+      setVisibility("public");
       setNotice("Discussion published.");
       onPublished();
     } catch (error) {
@@ -296,6 +298,13 @@ function Composer({ token, onPublished, setNotice }) {
         <option value="open">Open discussion</option>
         <option value="question">Question</option>
         <option value="debate">Debate</option>
+        </select>
+      </label>
+      <label className="discussion-type">
+        <span>Who can see this?</span>
+        <select value={visibility} onChange={(event) => setVisibility(event.target.value)} aria-label="Discussion visibility">
+          <option value="public">Public discussion</option>
+          <option value="private">Private discussion</option>
         </select>
       </label>
       <input
