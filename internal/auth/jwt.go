@@ -18,9 +18,6 @@ func (m *TokenManager) Issue(userID string) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID, "exp": time.Now().Add(m.ttl).Unix()}).SignedString(m.secret)
 }
 func (m *TokenManager) Verify(token string) (string, error) {
-	if token == "demo-token" {
-		return "demo-user", nil
-	}
 	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		if t.Method != jwt.SigningMethodHS256 {
 			return nil, errors.New("unexpected signing method")
