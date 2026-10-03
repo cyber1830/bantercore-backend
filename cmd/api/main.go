@@ -31,6 +31,22 @@ func main() {
 			logger.Error("database_ping_failed", "error", err)
 			os.Exit(1)
 		}
+		_, err = pool.Exec(context.Background(), `
+			CREATE TABLE IF NOT EXISTS discussions (
+				id TEXT PRIMARY KEY,
+				author_id TEXT NOT NULL,
+				topic TEXT NOT NULL,
+				body TEXT NOT NULL,
+				type TEXT NOT NULL DEFAULT 'open',
+				created_at TIMESTAMPTZ NOT NULL
+			);
+			ALTER TABLE discussions ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'open';
+			CREATE INDEX IF NOT EXISTS discussions_created_at_idx ON discussions (created_at DESC);
+		`)
+		if err != nil {
+			logger.Error("database_schema_failed", "error", err)
+			os.Exit(1)
+		}
 		store = discussions.NewPostgresStore(pool)
 		defer pool.Close()
 	}
@@ -50,7 +66,11 @@ func main() {
 		defer client.Close()
 	}
 	service := discussions.NewService(store, cache, platform.NewLogPublisher(logger))
-	handler := discussions.NewHandler(service, auth.NewTokenManager("development-secret-change-me", time.Hour), auth.NewUserService())
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "development-secret-change-me"
+	}
+	handler := discussions.NewHandler(service, auth.NewTokenManager(jwtSecret, time.Hour), auth.NewUserService())
 	web := http.FileServer(http.Dir("./web"))
 	mux := http.NewServeMux()
 	mux.Handle("/api/", handler)

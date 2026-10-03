@@ -2,3 +2,6 @@
 .gocache-test/
 frontend/node_modules/
 frontend/dist/
+agent-service/node_modules/
+agent-service/dist/
+agent-service/.env

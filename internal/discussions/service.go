@@ -15,6 +15,7 @@ type Discussion struct {
 	AuthorID  string    `json:"authorId"`
 	Topic     string    `json:"topic"`
 	Body      string    `json:"body"`
+	Type      string    `json:"type"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -38,6 +39,34 @@ type Comment struct {
 	AuthorID     string    `json:"authorId"`
 	Body         string    `json:"body"`
 	CreatedAt    time.Time `json:"createdAt"`
+	Accepted     bool      `json:"accepted"`
+}
+
+func (s *Service) AcceptComment(ctx context.Context, discussionID, commentID, actorID string) (Comment, error) {
+	discussions, err := s.store.List(ctx, 100)
+	if err != nil {
+		return Comment{}, err
+	}
+	owner := false
+	for _, discussion := range discussions {
+		if discussion.ID == discussionID {
+			owner = discussion.AuthorID == actorID
+			break
+		}
+	}
+	if !owner {
+		return Comment{}, errors.New("only the discussion author can accept replies")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for index, comment := range s.comments[discussionID] {
+		if comment.ID == commentID {
+			comment.Accepted = true
+			s.comments[discussionID][index] = comment
+			return comment, nil
+		}
+	}
+	return Comment{}, errors.New("comment not found")
 }
 
 type Service struct {
@@ -75,7 +104,7 @@ func validateDiscussionInput(author, topic, body string) error {
 	return nil
 }
 
-func newDiscussion(author, topic, body string) Discussion {
+func newDiscussion(author, topic, body, discussionType string) Discussion {
 	topic = normalizeText(topic)
 	body = normalizeText(body)
 	return Discussion{
@@ -83,6 +112,7 @@ func newDiscussion(author, topic, body string) Discussion {
 		AuthorID:  author,
 		Topic:     topic,
 		Body:      body,
+		Type:      discussionType,
 		CreatedAt: time.Now().UTC(),
 	}
 }
@@ -104,12 +134,19 @@ func newComment(discussionID, authorID, body string) Comment {
 	}
 }
 
-func (s *Service) Create(ctx context.Context, author, topic, body string) (Discussion, error) {
+func (s *Service) Create(ctx context.Context, author, topic, body string, types ...string) (Discussion, error) {
 	if err := validateDiscussionInput(author, topic, body); err != nil {
 		return Discussion{}, err
 	}
 
-	d := newDiscussion(author, topic, body)
+	discussionType := "open"
+	if len(types) > 0 {
+		discussionType = types[0]
+	}
+	if discussionType != "question" && discussionType != "debate" && discussionType != "open" {
+		discussionType = "open"
+	}
+	d := newDiscussion(author, topic, body, discussionType)
 	if err := s.store.Create(ctx, d); err != nil {
 		return Discussion{}, err
 	}

@@ -11,6 +11,7 @@ const api = async (path, options = {}) => {
 function App() {
   const [discussions, setDiscussions] = useState([]);
   const [activeFilter, setActiveFilter] = useState("For you");
+  const [search, setSearch] = useState("");
   const [thread, setThread] = useState(null);
   const [authMode, setAuthMode] = useState(null);
   const [user, setUser] = useState(() =>
@@ -21,6 +22,16 @@ function App() {
   );
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+
+  const openThread = (discussion) => {
+    setThread(discussion);
+    window.history.pushState({}, "", `#thread-${discussion.id}`);
+  };
+  const closeThread = () => {
+    setThread(null);
+    if (window.location.hash.startsWith("#thread-")) window.history.pushState({}, "", window.location.pathname);
+  };
 
   const loadDiscussions = async () => {
     setLoading(true);
@@ -37,6 +48,26 @@ function App() {
     loadDiscussions();
   }, []);
 
+  useEffect(() => {
+    const syncThread = () => {
+      const id = window.location.hash.startsWith("#thread-")
+        ? window.location.hash.slice(8)
+        : "";
+      const matched = id
+        ? discussions.find((discussion) => String(discussion.id) === String(id))
+        : null;
+      if (matched) setThread(matched);
+      if (!id) setThread(null);
+    };
+    window.addEventListener("popstate", syncThread);
+    window.addEventListener("hashchange", syncThread);
+    syncThread();
+    return () => {
+      window.removeEventListener("popstate", syncThread);
+      window.removeEventListener("hashchange", syncThread);
+    };
+  }, [discussions]);
+
   const signOut = () => {
     localStorage.removeItem("bantercore_token");
     localStorage.removeItem("bantercore_profile");
@@ -44,7 +75,11 @@ function App() {
     setUser(null);
   };
 
-  const sortedDiscussions = [...discussions].sort((a, b) => {
+  const filteredDiscussions = discussions.filter((discussion) => {
+    const query = search.trim().toLowerCase();
+    return !query || `${discussion.topic} ${discussion.body}`.toLowerCase().includes(query);
+  });
+  const sortedDiscussions = [...filteredDiscussions].sort((a, b) => {
     if (activeFilter === "Newest")
       return new Date(b.createdAt) - new Date(a.createdAt);
     return activeFilter === "Trending" ? b.body.length - a.body.length : 0;
@@ -63,13 +98,15 @@ function App() {
         </nav>
         <div className="account-actions">
           {user ? (
-            <button
-              className="avatar"
-              onClick={signOut}
-              title="Click to sign out"
-            >
-              {user.username?.[0]?.toUpperCase()}
-            </button>
+            <div style={{ position: "relative" }}>
+              <button className="avatar" onClick={() => setProfileMenuOpen(!profileMenuOpen)} title="Open profile menu">
+                {user.username?.[0]?.toUpperCase()}
+              </button>
+              {profileMenuOpen && <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 20, minWidth: 180, padding: 12, background: "#fff", border: "1px solid #e7e8e3", borderRadius: 12, boxShadow: "0 12px 30px #0002" }}>
+                <small style={{ display: "block", color: "#7d8490", marginBottom: 8 }}>{user.email || user.username}</small>
+                <button className="signin" style={{ width: "100%" }} onClick={signOut}>Log out</button>
+              </div>}
+            </div>
           ) : (
             <button className="signin" onClick={() => setAuthMode("signin")}>
               Sign in
@@ -124,7 +161,12 @@ function App() {
               <p className="eyebrow">THE COMMUNITY</p>
               <h2>Latest discussions</h2>
             </div>
-            <div className="filters">
+            <div className="community-tools">
+              <label className="search-box">
+                <span>⌕</span>
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search discussions" />
+              </label>
+              <div className="filters">
               {["For you", "Trending", "Newest"].map((filter) => (
                 <button
                   className={
@@ -136,6 +178,7 @@ function App() {
                   {filter}
                 </button>
               ))}
+              </div>
             </div>
           </div>
           {user && (
@@ -156,12 +199,12 @@ function App() {
               <article
                 className="discussion"
                 key={discussion.id}
-                onClick={() => setThread(discussion)}
+                onClick={() => openThread(discussion)}
               >
-                <div className="topic-label">{discussion.topic}</div>
+          <div className="topic-label">{discussion.type || "open"} · {discussion.topic}</div>
                 <h3>{discussion.body}</h3>
                 <p>
-                  Community member · <span>Open thread →</span>
+                  Community member · {discussion.createdAt ? new Date(discussion.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Today"} · <span>Open thread →</span>
                 </p>
               </article>
             ))}
@@ -211,7 +254,8 @@ function App() {
           discussion={thread}
           token={token}
           user={user}
-          onClose={() => setThread(null)}
+          fullPage
+          onClose={closeThread}
           onAuth={() => setAuthMode("signin")}
         />
       )}
@@ -222,6 +266,7 @@ function App() {
 function Composer({ token, onPublished, setNotice }) {
   const [topic, setTopic] = useState("");
   const [body, setBody] = useState("");
+  const [type, setType] = useState("open");
   const submit = async (event) => {
     event.preventDefault();
     try {
@@ -231,10 +276,11 @@ function Composer({ token, onPublished, setNotice }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ topic, body }),
+        body: JSON.stringify({ topic, body, type }),
       });
       setTopic("");
       setBody("");
+      setType("open");
       setNotice("Discussion published.");
       onPublished();
     } catch (error) {
@@ -243,6 +289,14 @@ function Composer({ token, onPublished, setNotice }) {
   };
   return (
     <form className="composer" id="composer" onSubmit={submit}>
+      <label className="discussion-type">
+        <span>Discussion format</span>
+        <select value={type} onChange={(event) => setType(event.target.value)} aria-label="Discussion format">
+        <option value="open">Open discussion</option>
+        <option value="question">Question</option>
+        <option value="debate">Debate</option>
+        </select>
+      </label>
       <input
         value={topic}
         onChange={(event) => setTopic(event.target.value)}
@@ -362,15 +416,21 @@ function AuthModal({ mode, onClose, onSuccess }) {
   );
 }
 
-function ThreadModal({ discussion, token, user, onClose, onAuth }) {
+function ThreadModal({ discussion, token, user, onClose, onAuth, fullPage = false }) {
   const [comments, setComments] = useState([]);
   const [body, setBody] = useState("");
+  const [replyError, setReplyError] = useState("");
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
   useEffect(() => {
-    api(`/v1/discussions/${discussion.id}/comments`).then(setComments);
+    api(`/v1/discussions/${discussion.id}/comments`).then((data) => setComments(data || []));
   }, [discussion.id]);
   const reply = async (event) => {
     event.preventDefault();
     if (!token) return onAuth();
+    if (!body.trim()) return;
+    setReplyError("");
     try {
       const comment = await api(`/v1/discussions/${discussion.id}/comments`, {
         method: "POST",
@@ -382,27 +442,97 @@ function ThreadModal({ discussion, token, user, onClose, onAuth }) {
       });
       setComments([...comments, comment]);
       setBody("");
+    } catch (error) {
+      setReplyError(error.message);
+    }
+  };
+  const acceptComment = async (commentId) => {
+    if (!token) return onAuth();
+    try {
+      const accepted = await api(
+        `/v1/discussions/${discussion.id}/comments/${commentId}/accept`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+      );
+      setComments(
+        comments.map((comment) => ({
+          ...comment,
+          accepted: comment.id === accepted.id,
+        })),
+      );
     } catch {}
   };
+  const summarizeThread = async () => {
+    setSummaryLoading(true);
+    setSummaryError("");
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_AGENT_URL || "http://localhost:4110"}/v1/thread-summary`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: discussion.topic,
+            body: discussion.body,
+            replies: comments.map((comment) => comment.body),
+          }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to summarize thread");
+      setSummary(data);
+    } catch (error) {
+      setSummaryError(error.message);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
   return (
-    <div className="modal-backdrop">
-      <div className="modal-card thread-modal">
+    <div className={fullPage ? "thread-page" : "modal-backdrop"}>
+      <div className={fullPage ? "thread-page-card" : "modal-card thread-modal"}>
         <button className="close" onClick={onClose}>
-          ×
+          {fullPage ? "← Back to discussions" : "×"}
         </button>
         <p className="eyebrow">THREAD</p>
         <h2>{discussion.topic}</h2>
         <p className="thread-body">{discussion.body}</p>
+        <div className="thread-ai-actions">
+          <button className="secondary-button" type="button" onClick={summarizeThread} disabled={summaryLoading}>
+            {summaryLoading ? "Summarizing..." : "Summarize with AI"}
+          </button>
+          {summaryError && <span className="error">{summaryError}</span>}
+        </div>
+        {summary && (
+          <div className="ai-summary">
+            <div>
+              <b>AI summary</b>
+              <p>{summary.summary}</p>
+            </div>
+            <div>
+              <b>Key viewpoints</b>
+              <ul>
+                {summary.keyViewpoints.map((viewpoint) => <li key={viewpoint}>{viewpoint}</li>)}
+              </ul>
+            </div>
+          </div>
+        )}
+        <div className="viewpoints" style={{ display: "flex", flexDirection: "column", gap: 6, padding: "16px 0", borderTop: "1px solid #e7e8e3", borderBottom: "1px solid #e7e8e3" }}>
+          <b>Key viewpoints</b>
+          <span className="muted" style={{ display: "block", marginTop: 4 }}>{comments.length ? `${comments.length} community perspective${comments.length === 1 ? "" : "s"}` : "Be the first to share a perspective"}</span>
+        </div>
         <div className="comments">
           {comments.length ? (
             comments.map((comment) => (
-              <p key={comment.id}>
+              <p key={comment.id} className={comment.accepted ? "comment accepted" : "comment"} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", lineHeight: 1.5 }}>
                 <b>
                   {user && comment.authorId === user.id
                     ? "You"
                     : "Community member"}
                 </b>{" "}
                 {comment.body}
+                {comment.accepted && <span title="Accepted reply" aria-label="Accepted reply" style={{ marginLeft: "auto", width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", background: "#2f9e62", color: "#fff", fontWeight: 900 }}>✓</span>}
+                {user && user.id === discussion.authorId && !comment.accepted && (
+                  <button className="accept-button" title="Mark this reply as helpful" aria-label="Mark this reply as helpful" style={{ marginLeft: "auto", width: 28, height: 28, border: "1px solid #e7e8e3", borderRadius: "50%", background: "#fff", color: "#7d8490", cursor: "pointer", fontWeight: 900 }} onClick={() => acceptComment(comment.id)}>✓</button>
+                )}
               </p>
             ))
           ) : (
@@ -425,6 +555,7 @@ function ThreadModal({ discussion, token, user, onClose, onAuth }) {
             {token ? "Reply" : "Sign in to reply"}
           </button>
         </form>
+        {replyError && <p className="error thread-error">{replyError}</p>}
       </div>
     </div>
   );

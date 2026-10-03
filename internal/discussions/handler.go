@@ -34,6 +34,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.create(w, r)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/comments"):
 		h.comment(w, r)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/accept"):
+		h.acceptComment(w, r)
 	case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/comments"):
 		h.comments(w, r)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/like"):
@@ -41,6 +43,30 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (h *Handler) acceptComment(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.user(r)
+	if !ok {
+		h.writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	trimmed := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/discussions/"), "/accept")
+	parts := strings.Split(strings.TrimSuffix(trimmed, "/comments/"), "/comments/")
+	if len(parts) != 2 {
+		h.writeJSONError(w, http.StatusBadRequest, "invalid comment path")
+		return
+	}
+	comment, err := h.service.AcceptComment(r.Context(), parts[0], parts[1], actor)
+	if err != nil {
+		status := http.StatusNotFound
+		if strings.Contains(err.Error(), "only the discussion author") {
+			status = http.StatusForbidden
+		}
+		h.writeJSONError(w, status, err.Error())
+		return
+	}
+	h.writeJSON(w, http.StatusOK, comment)
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -132,13 +158,14 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Topic string `json:"topic"`
 		Body  string `json:"body"`
+		Type  string `json:"type"`
 	}
 	if err := h.decodeJSON(r, &in); err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
-	d, err := h.service.Create(r.Context(), user, in.Topic, in.Body)
+	d, err := h.service.Create(r.Context(), user, in.Topic, in.Body, in.Type)
 	if err != nil {
 		h.writeJSONError(w, http.StatusBadRequest, "validation error")
 		return
@@ -172,7 +199,11 @@ func (h *Handler) comment(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) comments(w http.ResponseWriter, r *http.Request) {
 	id := h.parseDiscussionID(r.URL.Path)
-	h.writeJSON(w, http.StatusOK, h.service.Comments(r.Context(), id))
+	comments := h.service.Comments(r.Context(), id)
+	if comments == nil {
+		comments = []Comment{}
+	}
+	h.writeJSON(w, http.StatusOK, comments)
 }
 
 func (h *Handler) like(w http.ResponseWriter, r *http.Request) {
